@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Paint Sample</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <link href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container">
+      <canvas id="canvas"></canvas>
+      <button id="btnShare" type="button" class="btn btn-primary">Share</button>
+      <button id="btnSend" type="button" class="btn btn-info">Send</button>
+    </div>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@2.3.2/dist/signature_pad.min.js"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script>
+      const canvas = document.querySelector('#canvas');
+      const signaturePad = new SignaturePad(canvas, {
+        backgroundColor: 'rgb(238,238,238)',
+      });
+      $(window).on('load', function(){
+        canvas.setAttribute('width', $('.container').width());
+        canvas.setAttribute('height', window.innerHeight - $('#btnSend').outerHeight() - 10);
+        signaturePad.clear();
+  
+        const useNodeJS = true;   // if you are not using a node server, set this value to false
+        const defaultLiffId = "";   // change the default LIFF value if you are not using a node server
+  
+        // DO NOT CHANGE THIS
+        let myLiffId = "";
+  
+        // if node is used, fetch the environment variable and pass it to the LIFF method
+        // otherwise, pass defaultLiffId
+        if (useNodeJS) {
+            fetch('/api/send-id')
+                .then(function(reqResponse) {
+                    return reqResponse.json();
+                })
+                .then(function(jsonResponse) {
+                    myLiffId = jsonResponse.id;
+                    initializeLiff(myLiffId);
+                })
+                .catch(function(error) {
+                     alert(err);
+                });
+        } else {
+            myLiffId = defaultLiffId;
+            initializeLiff(myLiffId);
+        }
+      });
+        
+      /**
+      * Initialize LIFF
+      * @param {string} myLiffId The LIFF ID of the selected element
+      */
+      function initializeLiff(myLiffId) {
+          liff.init({
+                  liffId: myLiffId
+              })
+              .then(() => {
+                  if (!liff.isLoggedIn()) {
+                      liff.login();
+                  }
+              })
+              .catch((err) => {
+                  alert(err);
+              });
+      }
+      
+      
+      
+      /**
+      * Alert the user if LIFF is opened in an external browser and unavailable buttons are tapped
+      */
+      function sendAlertIfNotInClient() {
+          alert('This button is unavailable as LIFF is currently being opened in an external browser.');
+      }
+
+      $('#btnShare').on('click', function() {
+        const jsonData = {
+          image: signaturePad.toDataURL('image/jpeg')
+        }
+        $.ajax({
+          type: 'POST',
+          url: '/api/save',
+          data: JSON.stringify(jsonData),
+          contentType: 'application/json',
+          dataType: "json",
+          success: function (res, status) {
+            liff.getProfile().then(function (profile) {
+              if(liff.isApiAvailable('shareTargetPicker')){
+                liff.shareTargetPicker([
+                  {
+                    type: 'image',
+                    originalContentUrl: 'https://' + res.accountname +  '.blob.core.windows.net/images/' + res.filename,
+                    previewImageUrl: 'https://' + res.accountname +  '.blob.core.windows.net/images/' + res.filename
+                  },
+                  {
+                    type: 'text',
+                    text: 'From:' + profile.displayName
+                  }
+                ]).then(function () {
+                  window.alert("ShareTargetPicker was launched")
+                }).catch(function (error) {
+                  window.alert("Failed to launch ShareTargetPicker");
+                });
+              }else{
+                window.alert("Failed to launch ShareTargetPicker");
+              }
+            }).catch(function (error) {
+                window.alert("Error getting profile: " + error.message);
+            });
+          },
+          error: function (res) {
+            window.alert('Error saving image: ' + res.status);
+          },
+          complete: function(data) {
+          }
+        });
+      });
+      
+      $('#btnSend').on('click', function() {
+        const jsonData = {
+          image: signaturePad.toDataURL('image/jpeg')
+        }
+        $.ajax({
+          type: 'POST',
+          url: '/api/save',
+          data: JSON.stringify(jsonData),
+          contentType: 'application/json',
+          dataType: "json",
+          success: function (res, status) {
+            liff.getProfile().then(function (profile) {
+              if (!liff.isInClient()) {
+                sendAlertIfNotInClient();
+              } else {
+                liff.sendMessages([
+                  {
+                    type: 'image',
+                    originalContentUrl: 'https://' + res.accountname +  '.blob.core.windows.net/images/' + res.filename,
+                  previewImageUrl: 'https://' + res.accountname +  '.blob.core.windows.net/images/' + res.filename
+                  },
+                  {
+                    type: 'text',
+                    text: 'From:' + profile.displayName
+                  }
+                ]).then(function () {
+                  liff.closeWindow();
+                }).catch(function (error) {
+                  window.alert('Error sending message: ' + error.message);
+                });
+              }
+            }).catch(function (error) {
+                window.alert("Error getting profile: " + error.message);
+            });
+          },
+          error: function (res) {
+            window.alert('Error saving image: ' + res.status);
+          },
+          complete: function(data) {
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
